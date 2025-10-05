@@ -1,7 +1,0 @@
-Luokitellaan HRV:stä tai sen spektristä (mitattu X minuuttia) kuuluuko se mille intensiteettialueelle. Selvitetään mikä on pienin aika ikkuna jolla luokittelu voidaan tehdä. Ensin ehkä pelkkä OBLA.
-
-->Tukivektorikone ja spektri OBLAssa  
-
-Nykyisessä datassa tiedossa ventilaatiokynnykset.
-
-Ajatus: portaittaisessa kuormituksessa saadaan OBLA määritettyä kahden portaan väliin -> voidaan tehdä uusi testi näiden portaiden tehojen välissä pienillä nousuilla -> ehkä vielä kolmannen kerran jne. -> resoluutio paranee
