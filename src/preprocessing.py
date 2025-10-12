@@ -21,67 +21,44 @@ def mark_thresholds(data, subjects):
     return data 
 
 
-def replace_missing_beats(df, rr_column='RR', id_column='ID', upper_bound=2000, window_size=10):
-    """
-    Replaces missing beats (extra long RR-intervals) with the median of surrounding intervals.
-    
-    Parameters:
-    -----------
-    df : pandas.DataFrame
-        DataFrame containing RR-interval data in long format
-    rr_column : str, default 'RR'
-        Name of the column containing RR-intervals
-    id_column : str, default 'ID'
-        Name of the column containing subject IDs
-    upper_bound : int, default 2000
-        Upper threshold in milliseconds. RR-intervals above this will be considered missing beats.
-    window_size : int, default 10
-        Number of surrounding intervals to use for median calculation (5 on each side)
-    
-    Returns:
-    --------
-    pandas.DataFrame
-        DataFrame with missing beats replaced by local median
-    """
-    
-    
-    result_df = df.copy()
-    
-    # Group by ID to process each subject separately
-    for subject_id, subject_data in result_df.groupby(id_column):
-        rr_values = subject_data[rr_column].values
-        indices = subject_data.index
-        
-        cleaned_rr = rr_values.copy()
-        
-        for i in range(len(rr_values)):
-            current_rr = rr_values[i]
+def replace_missing_beats(df, rr_column='RR', id_column='ID', median_multiplier=1.2, window_size=10):
+    df = df.copy()
+    result_frames = []
 
-            if pd.isna(current_rr) or current_rr is None:
-                continue  
+    for subject_id, group in df.groupby(id_column):
+        rr_values = group[rr_column].to_numpy(dtype=float).copy()
+        n = len(rr_values)
+        
+        for i in range(n):
+            start = max(0, i - window_size)
+            end = min(n, i + window_size + 1)
             
-            # Check if current RR-interval exceeds upper bound
-            if current_rr > upper_bound:
-                
-                start_idx = max(0, i - window_size//2)
-                end_idx = min(len(rr_values), i + window_size//2 + 1)
-                
-                # Get the surrounding values (excluding the current outlier)
-                surrounding_values = []
-                for j in range(start_idx, end_idx):
-                    if j != i and rr_values[j] <= upper_bound:  # Exclude current and other outliers
-                        surrounding_values.append(rr_values[j])
-                
-                # If we have enough surrounding values, use their median
-                if len(surrounding_values) >= window_size//2:  # At least half the window size
-                    replacement_value = np.median(surrounding_values)
-                    cleaned_rr[i] = replacement_value
-                else:
-                    # If not enough surrounding values, use global median for this subject
-                    global_median = np.median([x for x in rr_values if x <= upper_bound])
-                    cleaned_rr[i] = global_median                
-        
-        
-        result_df.loc[indices, rr_column] = cleaned_rr
-    
-    return result_df
+            # Exclude the current value from the window
+            window = np.concatenate((rr_values[start:i], rr_values[i+1:end]))
+            
+            # Remove NaNs from the window
+            window = window[~np.isnan(window)]
+            
+            # Skip if no valid values left
+            if len(window) == 0:
+                continue
+
+            median_val = np.median(window)
+
+            # Skip if median is NaN (shouldn't happen after nan removal)
+            if np.isnan(median_val):
+                continue
+
+            # Replace if abs difference is larger than threshold
+            if abs(rr_values[i] - median_val) > median_val * (median_multiplier - 1):
+                old_val = rr_values[i]
+                rr_values[i] = median_val
+                print(f"Replaced outlier RR value {old_val} at index {i} for ID {subject_id} with median {median_val}")
+
+        group[rr_column] = rr_values
+        result_frames.append(group)
+
+    # Combine all processed groups
+    cleaned_df = pd.concat(result_frames, ignore_index=True)
+
+    return cleaned_df

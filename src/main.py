@@ -13,8 +13,16 @@ def load_data(measure_path, subject_path):
     return data, subjects 
 
 
+def remove_pre_post_periods(df, power_column='power'):
+    result_df = df.copy()
+    result_df = result_df[result_df[power_column] != 0]
+    
+    return result_df.reset_index(drop=True)
+
+
 def main():
     data, subjects = load_data('data/test_measure.csv', 'data/subject-info.csv')
+    data = remove_pre_post_periods(data)
     
     data = mark_thresholds(data, subjects)
     data.to_csv('data/marked_test_measure.csv', index=False)
@@ -29,6 +37,4 @@ if __name__ == '__main__':
     main()
 
 
-# Replace missing beats with the mean of the available beats?
-# Parse by start and end of the exercise test
-# Parse RR-intervals by thresholds 
+# Parse RR-intervals by thresholds and create teh dataset for ML models
