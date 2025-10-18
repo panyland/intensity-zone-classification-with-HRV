@@ -7,11 +7,21 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import classification_report, confusion_matrix
 
-from preprocessing import mark_thresholds
-from preprocessing import replace_missing_beats
-from preprocessing import remove_pre_post_periods
-from preprocessing import label_rr_intervals
-from plotting import plot_subject_data
+# Preprocessing functions
+from preprocessing import (
+    label_rr_intervals,
+    mark_thresholds,
+    remove_pre_post_periods,
+    replace_missing_beats,
+)
+
+# Plotting functions
+from plotting import (
+    plot_confusion_matrix,
+    plot_importances,
+    plot_patterns_by_class,
+    plot_subject_data,
+)
 
 
 def load_data(measure_path, subject_path):
@@ -36,6 +46,7 @@ def create_classification_dataset(df):
 
     grouped = grouped[grouped['At_vt'] == 0]
     classification_df = grouped[['RR', 'Sub_vt1', 'Mid_vt', 'Supra_vt2']].reset_index(drop=True)
+
     n = 100 # Number of RR-intervals per sample
     classification_df = classification_df[classification_df['RR'].apply(len) >= n].copy()
     classification_df['RR'] = classification_df['RR'].apply(lambda x: x[-n:])
@@ -69,9 +80,18 @@ def main():
     }
     print("Classification dataset label counts:", label_counts)
 
+    classification_data['VT_label_3class'] = classification_data[['Sub_vt1','Mid_vt','Supra_vt2']].idxmax(axis=1)
+    classification_data['Supra_vt1'] = (classification_data['Mid_vt'] + classification_data['Supra_vt2']).clip(0,1)
 
     X = np.stack(classification_data['RR'].values)
-    y = classification_data[['Sub_vt1', 'Mid_vt', 'Supra_vt2']].idxmax(axis=1)
+
+    mode = '3class'  # '3class' or '2class'
+
+    if mode == '3class':
+        y = classification_data['VT_label_3class'].values
+    elif mode == '2class':
+        y = classification_data['Supra_vt1'].values
+
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y, random_state=42)
 
     rf = RandomForestClassifier(
@@ -84,11 +104,17 @@ def main():
 
     y_pred = rf.predict(X_test)
 
+    report = classification_report(y_test, y_pred)
     print("Classification Report:")
-    print(classification_report(y_test, y_pred))
+    print(report)
 
-    print("\nConfusion Matrix:")
-    print(confusion_matrix(y_test, y_pred))
+    matrix = confusion_matrix(y_test, y_pred)
+    plot_confusion_matrix(matrix, y_test)
+
+    importances = rf.feature_importances_
+    plot_importances(importances)
+
+    plot_patterns_by_class(X, y)
 
     cv_scores = cross_val_score(rf, X, y, cv=5, scoring='accuracy')
     print(f"\nMean CV accuracy: {cv_scores.mean():.3f} ± {cv_scores.std():.3f}")
@@ -96,3 +122,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# Extract better features from RR sequences (SDNN, RMSSD, pNN50, power spectral features, DFA...)
