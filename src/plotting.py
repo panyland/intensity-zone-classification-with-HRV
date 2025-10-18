@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import os
 
+
 def plot_subject_data(data, output_dir='plots/descriptive'):
     os.makedirs(output_dir, exist_ok=True)
 

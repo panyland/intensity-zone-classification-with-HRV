@@ -1,9 +1,16 @@
 import pandas as pd
+import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.metrics import classification_report, confusion_matrix
+
 from preprocessing import mark_thresholds
 from preprocessing import replace_missing_beats
+from preprocessing import remove_pre_post_periods
+from preprocessing import label_rr_intervals
 from plotting import plot_subject_data
 
 
@@ -11,25 +18,6 @@ def load_data(measure_path, subject_path):
     data = pd.read_csv(measure_path)
     subjects = pd.read_csv(subject_path)
     return data, subjects 
-
-
-def remove_pre_post_periods(df, power_column='power'):
-    result_df = df.copy()
-    result_df = result_df[result_df[power_column] != 0]
-    
-    return result_df.reset_index(drop=True)
-
-
-def label_rr_intervals(df):
-    result_df = df.copy()
-    result_df['Sub_vt1'] = (result_df['power'] < result_df['P_vt1']).astype(int)
-    result_df['Mid_vt'] = ((result_df['power'] >= result_df['P_vt1']) & (result_df['power'] < result_df['P_vt2'])).astype(int)
-    result_df['Supra_vt2'] = (result_df['power'] > result_df['P_vt2']).astype(int)
-    result_df['At_vt'] = ((result_df['vt1_marker'] == 1) | (result_df['vt2_marker'] == 1)).astype(int)
-
-    result_df.loc[result_df['At_vt'] == 1, ['Sub_vt1', 'Mid_vt', 'Supra_vt2']] = 0
-
-    return result_df.reset_index(drop=True)
 
 
 def create_classification_dataset(df):
@@ -48,6 +36,11 @@ def create_classification_dataset(df):
 
     grouped = grouped[grouped['At_vt'] == 0]
     classification_df = grouped[['RR', 'Sub_vt1', 'Mid_vt', 'Supra_vt2']].reset_index(drop=True)
+    n = 100 # Number of RR-intervals per sample
+    classification_df = classification_df[classification_df['RR'].apply(len) >= n].copy()
+    classification_df['RR'] = classification_df['RR'].apply(lambda x: x[-n:])
+    classification_df = classification_df[classification_df['RR'].apply(lambda x: not any(pd.isna(v) for v in x))].copy()
+
     return classification_df
 
 
@@ -67,14 +60,39 @@ def main():
     data.to_csv('data/labeled_test_measure.csv', index=False) 
 
     classification_data = create_classification_dataset(data)
-    
-    n = 100 # Number of RR-intervals per sample
-    classification_data = classification_data[classification_data['RR'].apply(len) >= n].copy()
-    classification_data['RR'] = classification_data['RR'].apply(lambda x: x[-n:])
-    classification_data = classification_data[classification_data['RR'].apply(lambda x: not any(pd.isna(v) for v in x))].copy()
     classification_data.to_csv('data/classification_dataset.csv', index=False)
+
+    label_counts = {
+        'Sub_vt1': classification_data['Sub_vt1'].sum(),
+        'Mid_vt': classification_data['Mid_vt'].sum(),
+        'Supra_vt2': classification_data['Supra_vt2'].sum()
+    }
+    print("Classification dataset label counts:", label_counts)
+
+
+    X = np.stack(classification_data['RR'].values)
+    y = classification_data[['Sub_vt1', 'Mid_vt', 'Supra_vt2']].idxmax(axis=1)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y, random_state=42)
+
+    rf = RandomForestClassifier(
+        n_estimators=300,
+        max_depth=None,
+        class_weight='balanced',
+        random_state=42
+    )
+    rf.fit(X_train, y_train)
+
+    y_pred = rf.predict(X_test)
+
+    print("Classification Report:")
+    print(classification_report(y_test, y_pred))
+
+    print("\nConfusion Matrix:")
+    print(confusion_matrix(y_test, y_pred))
+
+    cv_scores = cross_val_score(rf, X, y, cv=5, scoring='accuracy')
+    print(f"\nMean CV accuracy: {cv_scores.mean():.3f} ± {cv_scores.std():.3f}")
 
 
 if __name__ == '__main__':
     main()
-

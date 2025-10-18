@@ -1,6 +1,14 @@
 import pandas as pd
 import numpy as np
 
+
+def remove_pre_post_periods(df, power_column='power'):
+    result_df = df.copy()
+    result_df = result_df[result_df[power_column] != 0]
+    
+    return result_df.reset_index(drop=True)
+
+
 def mark_thresholds(data, subjects):
     data = data.merge(subjects[['ID', 'P_vt1', 'P_vt2']], on='ID', how='left')
     data['vt1_marker'] = 0
@@ -19,6 +27,18 @@ def mark_thresholds(data, subjects):
             data.loc[mask & (data['ID'] == id_value), col] = 1
 
     return data 
+
+
+def label_rr_intervals(df):
+    result_df = df.copy()
+    result_df['Sub_vt1'] = (result_df['power'] < result_df['P_vt1']).astype(int)
+    result_df['Mid_vt'] = ((result_df['power'] >= result_df['P_vt1']) & (result_df['power'] < result_df['P_vt2'])).astype(int)
+    result_df['Supra_vt2'] = (result_df['power'] > result_df['P_vt2']).astype(int)
+    result_df['At_vt'] = ((result_df['vt1_marker'] == 1) | (result_df['vt2_marker'] == 1)).astype(int)
+
+    result_df.loc[result_df['At_vt'] == 1, ['Sub_vt1', 'Mid_vt', 'Supra_vt2']] = 0
+
+    return result_df.reset_index(drop=True)
 
 
 def replace_missing_beats(df, rr_column='RR', id_column='ID', median_multiplier=1.2, window_size=10):
