@@ -79,9 +79,9 @@ def plot_importances(im, output_dir='plots/results'):
 
     plt.figure(figsize=(10, 4))
     plt.bar(indices, im, color='skyblue')
-    plt.xlabel('RR interval position', fontsize=12)
+    plt.xlabel('Feature', fontsize=12)
     plt.ylabel('Feature importance', fontsize=12)
-    plt.title('Feature Importance across RR sequence', fontsize=14)
+    plt.title('Feature Importance', fontsize=14)
     plt.tight_layout()
     plt.savefig(f'{output_dir}/feature_importance.png', dpi=300)
     plt.close()
@@ -91,7 +91,7 @@ def plot_patterns_by_class(X, y, output_dir='plots/results'):
     classes = np.unique(y)
     plt.figure(figsize=(10, 4))
     for c in classes:
-        seqs = X[y == c]  # all RR sequences for class c
+        seqs = X[y == c] 
         mean_seq = np.mean(seqs, axis=0)
         std_seq = np.std(seqs, axis=0)
         plt.plot(mean_seq, label=f'{c}')

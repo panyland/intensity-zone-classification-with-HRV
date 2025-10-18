@@ -23,7 +23,7 @@ Includes:
 
 These were collected from **graded exercise tests on a cycle ergometer** involving **18 subjects**, sourced from [this dataset](https://physionet.org/content/actes-cycloergometer-exercise/1.0.0/).
 
-Model development and **time window optimization** for classification are currently in progress.
+Model development for classification is currently in progress.
 
 ## Future Work
 - Extend classification to lactate thresholds.
