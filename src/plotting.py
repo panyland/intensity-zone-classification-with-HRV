@@ -75,12 +75,12 @@ def plot_confusion_matrix(cm, y_test, output_dir='plots/results'):
 
 
 def plot_importances(im, output_dir='plots/results'):
-    indices = np.arange(len(im))
+    indices = ['sdnn','rmssd','sampen', 'lf','hf','lf_hf','total_power']
 
     plt.figure(figsize=(10, 4))
     plt.bar(indices, im, color='skyblue')
     plt.xlabel('Feature', fontsize=12)
-    plt.ylabel('Feature importance', fontsize=12)
+    plt.ylabel('Gini importance', fontsize=12)
     plt.title('Feature Importance', fontsize=14)
     plt.tight_layout()
     plt.savefig(f'{output_dir}/feature_importance.png', dpi=300)

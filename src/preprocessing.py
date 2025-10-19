@@ -29,18 +29,6 @@ def mark_thresholds(data, subjects):
     return data 
 
 
-def label_rr_intervals(df):
-    result_df = df.copy()
-    result_df['Sub_vt1'] = (result_df['power'] < result_df['P_vt1']).astype(int)
-    result_df['Mid_vt'] = ((result_df['power'] >= result_df['P_vt1']) & (result_df['power'] < result_df['P_vt2'])).astype(int)
-    result_df['Supra_vt2'] = (result_df['power'] > result_df['P_vt2']).astype(int)
-    result_df['At_vt'] = ((result_df['vt1_marker'] == 1) | (result_df['vt2_marker'] == 1)).astype(int)
-
-    result_df.loc[result_df['At_vt'] == 1, ['Sub_vt1', 'Mid_vt', 'Supra_vt2']] = 0
-
-    return result_df.reset_index(drop=True)
-
-
 def replace_missing_beats(df, rr_column='RR', id_column='ID', median_multiplier=1.2, window_size=10):
     df = df.copy()
     result_frames = []
@@ -82,3 +70,80 @@ def replace_missing_beats(df, rr_column='RR', id_column='ID', median_multiplier=
     cleaned_df = pd.concat(result_frames, ignore_index=True)
 
     return cleaned_df
+
+
+def label_rr_intervals(df):
+    result_df = df.copy()
+    result_df['Sub_vt1'] = (result_df['power'] < result_df['P_vt1']).astype(int)
+    result_df['Mid_vt'] = ((result_df['power'] >= result_df['P_vt1']) & (result_df['power'] < result_df['P_vt2'])).astype(int)
+    result_df['Supra_vt2'] = (result_df['power'] > result_df['P_vt2']).astype(int)
+    result_df['At_vt'] = ((result_df['vt1_marker'] == 1) | (result_df['vt2_marker'] == 1)).astype(int)
+
+    result_df.loc[result_df['At_vt'] == 1, ['Sub_vt1', 'Mid_vt', 'Supra_vt2']] = 0
+
+    return result_df.reset_index(drop=True)
+
+
+def create_classification_dataset(df, n=100, sampling_rate=4, interpolate=False):
+    df = df.copy()
+
+    # --- Case 1: Interpolation Mode ---
+    if interpolate:
+        grouped = df.groupby(['ID', 'power'])
+        results = []
+
+        for (ID, power), group in grouped:
+            group = group.sort_values('time')
+            t = group['time'].values
+            rr = group['RR'].values
+
+            if len(t) < 2:
+                continue  # cannot interpolate single-point group
+
+            # Uniform time grid (4 Hz → 0.25 s steps)
+            t_uniform = np.arange(t.min(), t.max(), 1 / sampling_rate)
+            rr_interp = np.interp(t_uniform, t, rr)
+
+            # Take last n samples (skip too-short)
+            if len(rr_interp) >= n:
+                rr_interp = rr_interp[-n:]
+            else:
+                continue
+
+            results.append({
+                'RR': rr_interp.tolist(),
+                'Sub_vt1': group['Sub_vt1'].max(),
+                'Mid_vt': group['Mid_vt'].max(),
+                'Supra_vt2': group['Supra_vt2'].max(),
+                'At_vt': group['At_vt'].max()
+            })
+
+        result_df = pd.DataFrame(results)
+
+    # --- Case 2: Original (non-interpolated) Mode ---
+    else:
+        grouped = (
+            df.groupby(['ID', 'power'])
+            .agg({
+                'RR': list,
+                'Sub_vt1': 'max',
+                'Mid_vt': 'max',
+                'Supra_vt2': 'max',
+                'At_vt': 'max'
+            })
+            .reset_index()
+        )
+        result_df = grouped.copy()
+
+        # Keep only valid non-At_vt samples
+        result_df = result_df[result_df['At_vt'] == 0]
+        result_df = result_df[['RR', 'Sub_vt1', 'Mid_vt', 'Supra_vt2']].reset_index(drop=True)
+        result_df = result_df[result_df['RR'].apply(len) >= n].copy()
+        result_df['RR'] = result_df['RR'].apply(lambda x: x[-n:])
+        result_df = result_df[result_df['RR'].apply(lambda x: not any(pd.isna(v) for v in x))].copy()
+
+    # Final cleanup — keep only At_vt==0 (if present)
+    if 'At_vt' in result_df.columns:
+        result_df = result_df[result_df.get('At_vt', 0) == 0].reset_index(drop=True)
+
+    return result_df[['RR', 'Sub_vt1', 'Mid_vt', 'Supra_vt2']]

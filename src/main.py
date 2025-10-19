@@ -3,22 +3,20 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 
-from scipy.stats import zscore 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import classification_report, confusion_matrix
 
-from feature_extraction import extract_hrv_features
-
-# Preprocessing functions
+from feature_extraction import (
+    extract_hrv_features
+)
 from preprocessing import (
     label_rr_intervals,
     mark_thresholds,
     remove_pre_post_periods,
     replace_missing_beats,
+    create_classification_dataset
 )
-
-# Plotting functions
 from plotting import (
     plot_confusion_matrix,
     plot_importances,
@@ -33,34 +31,10 @@ def load_data(measure_path, subject_path):
     return data, subjects 
 
 
-# Create dataset with RR-interval sequences and corresponding labels
-def create_classification_dataset(df):
-    result_df = df.copy()
-    grouped = (
-        result_df.groupby(['ID', 'power'])
-        .agg({
-            'RR': list,
-            'Sub_vt1': 'max',
-            'Mid_vt': 'max',
-            'Supra_vt2': 'max',
-            'At_vt': 'max'
-        })
-        .reset_index()
-    )
-
-    grouped = grouped[grouped['At_vt'] == 0]
-    classification_df = grouped[['RR', 'Sub_vt1', 'Mid_vt', 'Supra_vt2']].reset_index(drop=True)
-
-    n = 50 # Number of RR-intervals per sample
-    classification_df = classification_df[classification_df['RR'].apply(len) >= n].copy()
-    classification_df['RR'] = classification_df['RR'].apply(lambda x: x[-n:])
-    classification_df = classification_df[classification_df['RR'].apply(lambda x: not any(pd.isna(v) for v in x))].copy()
-
-    # RR sequences as arrays in RR column with labels as separate columns
-    return classification_df
-
-
 def main():
+
+    # ----------Preparation----------
+
     data, subjects = load_data('data/test_measure.csv', 'data/subject-info.csv')
     data = remove_pre_post_periods(data)
     
@@ -75,7 +49,7 @@ def main():
     data = label_rr_intervals(data)
     data.to_csv('data/labeled_test_measure.csv', index=False) 
 
-    classification_data = create_classification_dataset(data)
+    classification_data = create_classification_dataset(data, interpolate=True, n=150) # interpolate : bool (n should be higher if True?)
     classification_data.to_csv('data/classification_dataset.csv', index=False)
 
     label_counts = {
@@ -85,23 +59,17 @@ def main():
     }
     print("Classification dataset label counts:", label_counts)
     
-    # Written labels in addition to one-hot encoding, added labels for binary classification
+    # Written labels in addition to one-hot encoding + labels for binary classification
     classification_data['VT_label_3class'] = classification_data[['Sub_vt1','Mid_vt','Supra_vt2']].idxmax(axis=1)
     classification_data['Supra_vt1'] = (classification_data['Mid_vt'] + classification_data['Supra_vt2']).clip(0,1)
 
-    # Extract HRV features from RR sequences (SDNN, RMSSD, DFA alpha1)
-    features_df = extract_hrv_features(classification_data)
+    # Extract HRV features from RR sequences (SDNN, RMSSD, Sample Entropy)
+    features_df = extract_hrv_features(classification_data, include_freq=True) # include_freq : bool
     features_df.to_csv('data/hrv_features.csv', index=False)
 
-    use_features = True  # Set to True to use extracted features instead of raw RR sequences
+    X = features_df.drop(columns=['Sub_vt1', 'Mid_vt', 'Supra_vt2', 'VT_label_3class', 'Supra_vt1']).values
 
-    if use_features:
-        X = features_df.drop(columns=['Sub_vt1', 'Mid_vt', 'Supra_vt2', 'VT_label_3class', 'Supra_vt1']).values
-    else:
-        X = np.stack(classification_data['RR'].values)
-        #X = np.stack([zscore(rr) for rr in classification_data['RR'].values])
-
-    mode = '2class'  # '3class' or '2class'
+    mode = '3class'  # '3class' or '2class' 
 
     if mode == '3class':
         y = classification_data['VT_label_3class'].values
@@ -135,3 +103,6 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+# Get time domain features from raw RR intervals and frequency domain features from interpolated RR sequences
