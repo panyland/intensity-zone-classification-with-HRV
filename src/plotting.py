@@ -1,17 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import os
 
 
 def plot_subject_data(data, output_dir='plots/descriptive'):
-    os.makedirs(output_dir, exist_ok=True)
 
     for id_value, group in data.groupby('ID'):
         vt1_powers = group.loc[group['vt1_marker'] == 1, 'power'].unique()
         vt2_powers = group.loc[group['vt2_marker'] == 1, 'power'].unique()
 
-        # RR and Power
+        # ----------RR and Power----------
         fig, ax1 = plt.subplots()
         ax1.plot(group['time'], group['RR'], color='tab:blue')
         ax1.set_xlabel('Time (s)')
@@ -33,7 +31,7 @@ def plot_subject_data(data, output_dir='plots/descriptive'):
         plt.savefig(f'{output_dir}/plot_RR_power_{id_value}.png')
         plt.close()
 
-        # VO2 and Power
+        # ----------VO2 and Power----------
         fig, ax1 = plt.subplots()
         ax1.plot(group['time'], group['VO2'], color='tab:green')
         ax1.set_xlabel('Time (s)')
@@ -74,33 +72,14 @@ def plot_confusion_matrix(cm, y_test, output_dir='plots/results'):
     plt.close()
 
 
-def plot_importances(im, output_dir='plots/results'):
-    indices = ['sdnn','rmssd','sampen', 'lf','hf','lf_hf','total_power']
+def plot_importances(im, features, output_dir='plots/results'):
+    features = ['sdnn','rmssd','sampen', 'lf','hf','lf_hf','total_power']
 
     plt.figure(figsize=(10, 4))
-    plt.bar(indices, im, color='skyblue')
+    plt.bar(features, im, color='skyblue')
     plt.xlabel('Feature', fontsize=12)
     plt.ylabel('Gini importance', fontsize=12)
     plt.title('Feature Importance', fontsize=14)
     plt.tight_layout()
     plt.savefig(f'{output_dir}/feature_importance.png', dpi=300)
-    plt.close()
-
-
-def plot_patterns_by_class(X, y, output_dir='plots/results'):
-    classes = np.unique(y)
-    plt.figure(figsize=(10, 4))
-    for c in classes:
-        seqs = X[y == c] 
-        mean_seq = np.mean(seqs, axis=0)
-        std_seq = np.std(seqs, axis=0)
-        plt.plot(mean_seq, label=f'{c}')
-        plt.fill_between(range(len(mean_seq)), mean_seq - std_seq, mean_seq + std_seq, alpha=0.2)
-
-    plt.xlabel('RR position in sequence', fontsize=12)
-    plt.ylabel('RR interval (ms)', fontsize=12)
-    plt.title('Mean RR sequences ± 1 SD per class', fontsize=14)
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(f'{output_dir}/rr_sequence_patterns.png', dpi=300)
     plt.close()

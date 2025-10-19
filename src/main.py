@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 
@@ -7,9 +6,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import classification_report, confusion_matrix
 
-from feature_extraction import (
-    extract_hrv_features
-)
+from feature_extraction import extract_hrv_features
 from preprocessing import (
     label_rr_intervals,
     mark_thresholds,
@@ -20,7 +17,6 @@ from preprocessing import (
 from plotting import (
     plot_confusion_matrix,
     plot_importances,
-    plot_patterns_by_class,
     plot_subject_data,
 )
 
@@ -63,7 +59,8 @@ def main():
     classification_data['VT_label_3class'] = classification_data[['Sub_vt1','Mid_vt','Supra_vt2']].idxmax(axis=1)
     classification_data['Supra_vt1'] = (classification_data['Mid_vt'] + classification_data['Supra_vt2']).clip(0,1)
 
-    # Extract HRV features from RR sequences (SDNN, RMSSD, Sample Entropy)
+    # ----------Features----------
+   
     features_df = extract_hrv_features(classification_data, include_freq=True) # include_freq : bool
     features_df.to_csv('data/hrv_features.csv', index=False)
 
@@ -93,9 +90,7 @@ def main():
     plot_confusion_matrix(matrix, y_test)
 
     importances = rf.feature_importances_
-    plot_importances(importances)
-
-    plot_patterns_by_class(X, y) # Useful only when using raw RR sequences
+    plot_importances(importances, list(features_df.columns[:-5]))  # Exclude label columns
 
     cv_scores = cross_val_score(rf, X, y, cv=5, scoring='accuracy')
     print(f"\nMean CV accuracy: {cv_scores.mean():.3f} ± {cv_scores.std():.3f}")
